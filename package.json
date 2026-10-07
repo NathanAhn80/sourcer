@@ -1,0 +1,16 @@
+{
+  "name": "sourcer",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/web",
+    "extension"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w apps/web",
+    "dev:ext": "npm run dev -w extension",
+    "build": "npm run build -w apps/web && npm run build -w extension",
+    "db:push": "npm run db:push -w apps/web",
+    "db:seed": "npm run db:seed -w apps/web"
+  }
+}

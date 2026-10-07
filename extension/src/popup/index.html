@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sourcer</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <h1>Sourcer</h1>
+    <p class="hint">Threads · 샤오홍슈 오버레이 / 수집 / 다운로드</p>
+    <label>
+      API Base
+      <input id="apiBase" type="url" placeholder="http://localhost:3456" />
+    </label>
+    <label>
+      API Key
+      <input id="apiKey" type="text" placeholder="sk_..." spellcheck="false" />
+    </label>
+    <div class="row">
+      <button id="save" type="button">저장</button>
+      <button id="openDash" type="button" class="secondary">대시보드</button>
+    </div>
+    <p id="status"></p>
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

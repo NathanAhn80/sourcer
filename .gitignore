@@ -1,0 +1,14 @@
+node_modules
+.next
+dist
+.turbo
+*.db
+*.db-journal
+.env
+.env.local
+.DS_Store
+extension/dist
+apps/web/prisma/*.db
+apps/web/prisma/*.db-journal
+*.log
+.vite
