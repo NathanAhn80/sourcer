@@ -4,7 +4,7 @@ export default defineManifest({
   manifest_version: 3,
   name: "Sourcer — Threads & Xiaohongshu",
   description: "Performance overlays, collect, and media download for Threads and Xiaohongshu.",
-  version: "0.1.0",
+  version: "0.1.21",
   action: {
     default_popup: "src/popup/index.html",
     default_title: "Sourcer",
@@ -18,6 +18,8 @@ export default defineManifest({
     "http://localhost:3456/*",
     "https://www.threads.net/*",
     "https://threads.net/*",
+    "https://www.threads.com/*",
+    "https://threads.com/*",
     "https://www.xiaohongshu.com/*",
     "https://xiaohongshu.com/*",
     "https://*.xhscdn.com/*",
@@ -26,7 +28,23 @@ export default defineManifest({
   ],
   content_scripts: [
     {
-      matches: ["https://www.threads.net/*", "https://threads.net/*"],
+      matches: [
+        "https://www.threads.net/*",
+        "https://threads.net/*",
+        "https://www.threads.com/*",
+        "https://threads.com/*",
+      ],
+      js: ["src/content/threads-hook.ts"],
+      run_at: "document_start",
+      world: "MAIN",
+    },
+    {
+      matches: [
+        "https://www.threads.net/*",
+        "https://threads.net/*",
+        "https://www.threads.com/*",
+        "https://threads.com/*",
+      ],
       js: ["src/content/threads.ts"],
       run_at: "document_idle",
     },

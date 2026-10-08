@@ -14,12 +14,12 @@ Sources: HypeDuck public guide/store listing + **live screenshots** (Threads fee
 ### Left metric stack (beside each post)
 | Field | Example | Formula (MVP) |
 | --- | --- | --- |
-| Grade + multiple | `폭발 166.5배` | grade from `views / followers` |
-| 조회 | `9.4만` | page views |
-| 팔로워 | `567` | author followers when visible |
-| 참여율 | `1.1%` | `(likes+replies+reposts) / views * 100` |
+| Grade + multiple | `폭발 31.1배` | `성과배수 = 조회 ÷ 팔로워` (약함&lt;1 / 보통1~3 / 우수3~10 / 강력10~30 / 폭발≥30) |
+| 조회 | `9.4만` | page / session GraphQL views |
+| 팔로워 | `567` | author followers |
+| 참여율 | `1.4%` | `(좋아요+댓글+리포스트+공유) ÷ 조회 × 100` |
 | 시간당 조회 | `1,978` | `views / hours_since_post` |
-| 확산 | `4.9` | `log10(views)` (proxy score) |
+| 확산 | `6.9` | `(리포스트+공유) ÷ 조회 × 1000` |
 
 ### Right keyword chips
 - Extract tokens from caption (KO/ZH/EN), show as searchable chips (opens Threads search).

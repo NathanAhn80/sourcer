@@ -1,13 +1,37 @@
 export type Grade = "약함" | "보통" | "우수" | "강력" | "폭발";
 
-/** Threads-scale multiples (views/followers often >> 10). */
+/**
+ * Threads grade thresholds (from live HypeDuck tooltips):
+ * - 약함: <1 (팔로워보다 적게 도달)
+ * - 보통: 1~3
+ * - 우수: 3~10
+ * - 강력: 10~30
+ * - 폭발: ≥30
+ */
 export function gradeFromMultiple(multiple: number | null | undefined): Grade | null {
   if (multiple == null || !Number.isFinite(multiple)) return null;
-  if (multiple >= 50) return "폭발";
-  if (multiple >= 20) return "강력";
-  if (multiple >= 5) return "우수";
+  if (multiple >= 30) return "폭발";
+  if (multiple >= 10) return "강력";
+  if (multiple >= 3) return "우수";
   if (multiple >= 1) return "보통";
   return "약함";
+}
+
+export function gradeDescription(grade: Grade | null | undefined): string {
+  switch (grade) {
+    case "폭발":
+      return "폭발 — 팔로워의 30배 이상 도달";
+    case "강력":
+      return "강력 — 팔로워의 10~30배 도달";
+    case "우수":
+      return "우수 — 팔로워의 3~10배 도달";
+    case "보통":
+      return "보통 — 팔로워의 1~3배 도달";
+    case "약함":
+      return "약함 — 팔로워보다 적게 도달";
+    default:
+      return "";
+  }
 }
 
 /** Xiaohongshu-scale multiples (likes / typical likes). */
@@ -20,6 +44,7 @@ export function gradeFromMultipleXhs(multiple: number | null | undefined): Grade
   return "약함";
 }
 
+/** 성과배수 = 조회 ÷ 팔로워 */
 export function computePerformanceMultiple(opts: {
   views?: number | null;
   likes?: number | null;
@@ -39,21 +64,31 @@ export function computePerformanceMultiple(opts: {
   return null;
 }
 
+/** 참여율(%) = (좋아요+댓글+리포스트+공유) ÷ 조회 × 100 */
 export function engagementRate(opts: {
   views?: number | null;
   likes?: number | null;
   replies?: number | null;
   reposts?: number | null;
+  shares?: number | null;
 }): number | null {
   const views = opts.views;
   if (views == null || views <= 0) return null;
-  const eng = (opts.likes ?? 0) + (opts.replies ?? 0) + (opts.reposts ?? 0);
+  const eng =
+    (opts.likes ?? 0) + (opts.replies ?? 0) + (opts.reposts ?? 0) + (opts.shares ?? 0);
   return Math.round((eng / views) * 1000) / 10;
 }
 
-export function spreadScore(views: number | null | undefined): number | null {
+/** 확산 = (리포스트+공유) ÷ 조회 × 1000 */
+export function spreadScore(opts: {
+  views?: number | null;
+  reposts?: number | null;
+  shares?: number | null;
+}): number | null {
+  const views = opts.views;
   if (views == null || views <= 0) return null;
-  return Math.round(Math.log10(views) * 10) / 10;
+  const spread = ((opts.reposts ?? 0) + (opts.shares ?? 0)) / views * 1000;
+  return Math.round(spread * 10) / 10;
 }
 
 export function formatCompact(n: number | null | undefined): string {
@@ -89,7 +124,6 @@ const STOP = new Set([
   "的", "了", "是", "我", "你", "在", "和", "就", "都", "也",
 ]);
 
-/** Lightweight keyword chips from caption text. */
 export function extractKeywords(caption: string, limit = 6): string[] {
   const parts = caption
     .replace(/https?:\/\/\S+/g, " ")

@@ -1,4 +1,14 @@
 import { formatCompact, type Grade } from "./grades";
+import {
+  ensurePositionListeners,
+  pruneFixedStacks,
+  refreshStackLayout,
+  registerFixedStack,
+  unregisterFixedStack,
+} from "./position";
+
+/** postId → host element currently owning the overlay */
+const overlayHosts = new Map<string, HTMLElement>();
 
 const STYLE_ID = "sourcer-overlay-style";
 
@@ -16,9 +26,14 @@ export function ensureOverlayStyles() {
       align-items: flex-start;
       pointer-events: auto;
       font: 600 11px/1.2 "Segoe UI", system-ui, sans-serif;
+      overflow: hidden;
+      box-sizing: border-box;
     }
-    .sourcer-stack[data-pos="left"] { top: 8px; left: -118px; width: 110px; }
+    .sourcer-stack[data-pos="left"] { top: 8px; left: 8px; width: 112px; }
+    .sourcer-stack[data-pos="fixed-left"] { width: 112px; }
+    .sourcer-stack[data-pos="inside-right"] { top: 8px; right: 8px; width: 120px; align-items: flex-end; }
     .sourcer-stack[data-pos="card-tl"] { top: 8px; left: 8px; }
+    .sourcer-stack .sourcer-menu { position: absolute; top: 0; left: 118px; }
     .sourcer-pill {
       display: inline-flex;
       align-items: center;
@@ -36,10 +51,19 @@ export function ensureOverlayStyles() {
     .sourcer-pill.grade-보통 { background: #4b5563; }
     .sourcer-pill.grade-약함 { background: #1f2937; color: #9ca3af; }
     .sourcer-pill.action { cursor: pointer; background: #111827; border: 1px solid #374151; }
+    .sourcer-pill.has-tip { position: relative; cursor: help; }
+    .sourcer-tip {
+      display: none; position: absolute; left: 0; top: calc(100% + 6px);
+      z-index: 2147483647; min-width: 220px; max-width: 280px;
+      background: #1c1c1e; color: #f5f5f7; border-radius: 10px; padding: 10px 12px;
+      font: 500 11px/1.45 "Segoe UI", system-ui, sans-serif;
+      box-shadow: 0 8px 24px rgba(0,0,0,.4); white-space: pre-wrap; text-align: left;
+    }
+    .sourcer-pill.has-tip:hover .sourcer-tip { display: block; }
     .sourcer-keywords {
       position: absolute;
       z-index: 2147483646;
-      top: 8px; right: -150px;
+      top: auto; bottom: 48px; right: 8px;
       width: 140px;
       background: #fff;
       color: #111;
@@ -142,6 +166,12 @@ export type ThreadsStackMetrics = {
   engagementRate?: number | null;
   velocity?: number | null;
   spread?: number | null;
+  tips?: {
+    grade?: string;
+    engagement?: string;
+    spread?: string;
+    multiple?: string;
+  };
 };
 
 export type ThreadsMenuActions = {
@@ -155,111 +185,177 @@ export type ThreadsMenuActions = {
   photoCount?: number;
 };
 
+export function pruneThreadsOverlays(livePostIds: Set<string>) {
+  for (const [postId, host] of overlayHosts) {
+    if (!livePostIds.has(postId) || !host.isConnected) {
+      unregisterFixedStack(host);
+      document.querySelector(`.sourcer-stack[data-post="${postId}"]`)?.remove();
+      document.querySelector(`.sourcer-keywords[data-post="${postId}"]`)?.remove();
+      overlayHosts.delete(postId);
+    }
+  }
+  pruneFixedStacks(new Set(overlayHosts.values()));
+}
+
 export function mountThreadsOverlay(
   host: HTMLElement,
   metrics: ThreadsStackMetrics,
   keywords: string[],
   actions: ThreadsMenuActions,
-  opts?: { showKeywords?: boolean },
+  opts?: { showKeywords?: boolean; postId?: string },
 ) {
   ensureOverlayStyles();
-  if (getComputedStyle(host).position === "static") {
-    host.style.position = "relative";
+  ensurePositionListeners();
+
+  const postId = opts?.postId || host.getAttribute("data-sourcer-post") || "";
+  if (postId) {
+    const prev = overlayHosts.get(postId);
+    if (prev && prev !== host) {
+      unregisterFixedStack(prev);
+      prev.removeAttribute("data-sourcer-stack-id");
+      prev.removeAttribute("data-sourcer-post");
+    }
+    overlayHosts.set(postId, host);
+    host.setAttribute("data-sourcer-post", postId);
   }
 
-  let stack = host.querySelector<HTMLElement>(":scope > .sourcer-stack");
+  const stackId =
+    host.getAttribute("data-sourcer-stack-id") ||
+    (postId ? `p-${postId}` : `s${Math.random().toString(36).slice(2, 9)}`);
+  host.setAttribute("data-sourcer-stack-id", stackId);
+
+  let stack = document.querySelector<HTMLElement>(
+    postId
+      ? `.sourcer-stack[data-post="${postId}"]`
+      : `.sourcer-stack[data-anchor="${stackId}"]`,
+  );
   if (!stack) {
     stack = document.createElement("div");
     stack.className = "sourcer-stack";
-    stack.dataset.pos = "left";
-    host.appendChild(stack);
+    stack.dataset.anchor = stackId;
+    if (postId) stack.dataset.post = postId;
+    document.documentElement.appendChild(stack);
+  } else {
+    stack.dataset.anchor = stackId;
+    if (postId) stack.dataset.post = postId;
   }
+  registerFixedStack(host, stack);
+
+  const tip = (html: string | undefined) =>
+    html ? `<span class="sourcer-tip">${escapeHtml(html)}</span>` : "";
 
   const pills: string[] = [];
   if (metrics.grade != null && metrics.multiple != null) {
     pills.push(
-      `<span class="sourcer-pill grade-${metrics.grade}">${metrics.grade} ${metrics.multiple}배</span>`,
+      `<span class="sourcer-pill has-tip grade-${metrics.grade}">${metrics.grade} ${metrics.multiple}배${tip(metrics.tips?.grade || metrics.tips?.multiple)}</span>`,
     );
   } else if (metrics.grade) {
-    pills.push(`<span class="sourcer-pill grade-${metrics.grade}">${metrics.grade}</span>`);
+    pills.push(
+      `<span class="sourcer-pill has-tip grade-${metrics.grade}">${metrics.grade}${tip(metrics.tips?.grade)}</span>`,
+    );
   }
   if (metrics.views != null) {
     pills.push(`<span class="sourcer-pill">조회 ${formatCompact(metrics.views)}</span>`);
+  } else {
+    pills.push(`<span class="sourcer-pill">조회 —</span>`);
   }
   if (metrics.followers != null) {
     pills.push(`<span class="sourcer-pill">팔로워 ${formatCompact(metrics.followers)}</span>`);
+  } else {
+    pills.push(`<span class="sourcer-pill">팔로워 —</span>`);
   }
   if (metrics.engagementRate != null) {
-    pills.push(`<span class="sourcer-pill">참여율 ${metrics.engagementRate}%</span>`);
+    pills.push(
+      `<span class="sourcer-pill has-tip">참여율 ${metrics.engagementRate}%${tip(metrics.tips?.engagement)}</span>`,
+    );
   }
   if (metrics.velocity != null) {
     pills.push(`<span class="sourcer-pill">시간당 조회 ${formatCompact(metrics.velocity)}</span>`);
   }
   if (metrics.spread != null) {
-    pills.push(`<span class="sourcer-pill">확산 ${metrics.spread}</span>`);
+    pills.push(
+      `<span class="sourcer-pill has-tip">확산 ${metrics.spread}${tip(metrics.tips?.spread)}</span>`,
+    );
   }
   pills.push(`<button type="button" class="sourcer-pill action" data-act="menu">다운로드 ▾</button>`);
   pills.push(`<button type="button" class="sourcer-pill action" data-act="collect">수집</button>`);
-  stack.innerHTML = pills.join("");
 
-  // Keywords box
-  let kw = host.querySelector<HTMLElement>(":scope > .sourcer-keywords");
-  if (!kw) {
-    kw = document.createElement("div");
-    kw.className = "sourcer-keywords";
-    host.appendChild(kw);
-  }
-  if (opts?.showKeywords !== false && keywords.length) {
+  const photoLabel =
+    (actions.photoCount ?? 0) > 0 ? `사진 ${actions.photoCount}장 다운로드` : "사진 다운로드";
+  stack.innerHTML = `
+    ${pills.join("")}
+    <div class="sourcer-menu">
+      <div class="hint">미디어 · 텍스트 · 수집</div>
+      <button type="button" class="primary" data-m="video">영상 다운로드</button>
+      <button type="button" data-m="photos">${photoLabel}</button>
+      <button type="button" data-m="link">링크 복사</button>
+      <button type="button" data-m="text">텍스트 복사</button>
+      <button type="button" data-m="collect">스레드 텍스트 저장</button>
+      <div class="row">
+        <button type="button" data-m="csv">CSV</button>
+      </div>
+    </div>
+  `;
+
+  // Keywords: off by default (less clutter / faster). Enable via opts.
+  let kw = document.querySelector<HTMLElement>(
+    postId
+      ? `.sourcer-keywords[data-post="${postId}"]`
+      : `.sourcer-keywords[data-anchor="${stackId}"]`,
+  );
+  if (opts?.showKeywords && keywords.length) {
+    if (!kw) {
+      kw = document.createElement("div");
+      kw.className = "sourcer-keywords show";
+      kw.dataset.anchor = stackId;
+      if (postId) kw.dataset.post = postId;
+      document.documentElement.appendChild(kw);
+    }
     kw.classList.add("show");
     kw.innerHTML = keywords
-      .map(
-        (k) =>
-          `<button type="button" data-kw="${escapeAttr(k)}">🔍 ${escapeHtml(k)}</button>`,
-      )
+      .map((k) => `<button type="button" data-kw="${escapeAttr(k)}">🔍 ${escapeHtml(k)}</button>`)
       .join("");
+    const hostRect = () => host.getBoundingClientRect();
+    const placeKw = () => {
+      const r = hostRect();
+      kw!.style.position = "fixed";
+      kw!.style.top = `${r.top + 8}px`;
+      kw!.style.left = `${r.right + 8}px`;
+      kw!.style.zIndex = "2147483646";
+    };
+    placeKw();
     kw.querySelectorAll<HTMLButtonElement>("[data-kw]").forEach((btn) => {
       btn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const q = btn.dataset.kw ?? "";
-        window.open(`https://www.threads.net/search?q=${encodeURIComponent(q)}`, "_blank");
+        window.open(
+          `https://www.threads.com/search?q=${encodeURIComponent(btn.dataset.kw ?? "")}`,
+          "_blank",
+        );
       };
     });
   } else {
-    kw.classList.remove("show");
-    kw.innerHTML = "";
+    kw?.remove();
   }
 
-  // Action menu
-  let menu = host.querySelector<HTMLElement>(":scope > .sourcer-menu");
-  if (!menu) {
-    menu = document.createElement("div");
-    menu.className = "sourcer-menu";
-    host.appendChild(menu);
-  }
-  const photoLabel =
-    (actions.photoCount ?? 0) > 0 ? `사진 ${actions.photoCount}장 다운로드` : "사진 다운로드";
-  const videoLabel = (actions.videoCount ?? 0) > 0 ? "영상 다운로드" : "영상 다운로드";
-  menu.innerHTML = `
-    <div class="hint">미디어 · 텍스트 · 수집</div>
-    <button type="button" class="primary" data-m="video">${videoLabel}</button>
-    <button type="button" data-m="photos">${photoLabel}</button>
-    <button type="button" data-m="link">링크 복사</button>
-    <button type="button" data-m="text">텍스트 복사</button>
-    <button type="button" data-m="collect">스레드 텍스트 저장</button>
-    <div class="row">
-      <button type="button" data-m="csv">CSV</button>
-      <button type="button" data-m="toggle-kw">해시 표시</button>
-    </div>
-  `;
-
+  const menu = stack.querySelector<HTMLElement>(":scope > .sourcer-menu")!;
   const menuBtn = stack.querySelector<HTMLButtonElement>('[data-act="menu"]');
   const collectBtn = stack.querySelector<HTMLButtonElement>('[data-act="collect"]');
   if (menuBtn) {
     menuBtn.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      menu!.classList.toggle("open");
+      const open = menu.classList.toggle("open");
+      // Menu needs room; temporarily lift height clamp while open
+      if (open) {
+        stack.style.maxHeight = "none";
+        stack.style.overflow = "visible";
+        stack.querySelectorAll<HTMLElement>(":scope > .sourcer-pill").forEach((p) => {
+          p.style.display = "";
+        });
+      } else {
+        refreshStackLayout();
+      }
     };
   }
   if (collectBtn && actions.onCollect) {
@@ -271,17 +367,13 @@ export function mountThreadsOverlay(
   }
 
   const bind = (key: string, fn?: () => void | Promise<void>) => {
-    const btn = menu!.querySelector<HTMLButtonElement>(`[data-m="${key}"]`);
+    const btn = menu.querySelector<HTMLButtonElement>(`[data-m="${key}"]`);
     if (!btn) return;
     btn.onclick = async (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      if (key === "toggle-kw") {
-        kw!.classList.toggle("show");
-        return;
-      }
       if (fn) await fn();
-      menu!.classList.remove("open");
+      menu.classList.remove("open");
     };
   };
   bind("video", actions.onDownloadVideo);
@@ -290,7 +382,8 @@ export function mountThreadsOverlay(
   bind("text", actions.onCopyText);
   bind("collect", actions.onCollect);
   bind("csv", actions.onExportCsv);
-  bind("toggle-kw");
+
+  refreshStackLayout();
 }
 
 export function mountXhsCardOverlay(

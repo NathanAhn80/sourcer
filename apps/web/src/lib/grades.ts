@@ -1,16 +1,15 @@
 export type Grade = "약함" | "보통" | "우수" | "강력" | "폭발";
 
-/** Threads-scale multiples (views/followers). */
+/** Threads: 약함 <1 · 보통 1~3 · 우수 3~10 · 강력 10~30 · 폭발 ≥30 */
 export function gradeFromMultiple(multiple: number | null | undefined): Grade | null {
   if (multiple == null || !Number.isFinite(multiple)) return null;
-  if (multiple >= 50) return "폭발";
-  if (multiple >= 20) return "강력";
-  if (multiple >= 5) return "우수";
+  if (multiple >= 30) return "폭발";
+  if (multiple >= 10) return "강력";
+  if (multiple >= 3) return "우수";
   if (multiple >= 1) return "보통";
   return "약함";
 }
 
-/** Xiaohongshu-scale multiples (likes / typical likes). */
 export function gradeFromMultipleXhs(multiple: number | null | undefined): Grade | null {
   if (multiple == null || !Number.isFinite(multiple)) return null;
   if (multiple >= 10) return "폭발";
