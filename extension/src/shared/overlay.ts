@@ -6,10 +6,11 @@ export function ensureOverlayStyles() {
   style.id = STYLE_ID;
   style.textContent = `
     .sourcer-dl {
-      position: absolute; top: 8px; right: 8px; z-index: 2147483646;
-      display: flex; gap: 4px;
+      position: absolute; top: 8px; left: calc(100% + 8px); z-index: 2147483646;
+      display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
       font: 600 12px/1.2 "Segoe UI", system-ui, sans-serif;
     }
+    .sourcer-dl[data-place="inside"] { left: auto; right: 8px; flex-direction: row; }
     .sourcer-dl button {
       cursor: pointer; border: 1px solid #374151; border-radius: 999px;
       padding: 5px 10px; background: rgba(17, 24, 39, 0.92); color: #f3f4f6;
@@ -31,6 +32,8 @@ export type DownloadActions = {
   photoCount: number;
   onDownloadVideo?: () => void | Promise<void>;
   onDownloadPhotos?: () => void | Promise<void>;
+  /** "outside" (default) sits right of the card; "inside" overlays its top-right corner. */
+  placement?: "outside" | "inside";
 };
 
 /** Mounts (or refreshes) a small download button row on a post/note card. */
@@ -48,6 +51,7 @@ export function mountDownloadButtons(host: HTMLElement, actions: DownloadActions
     box.className = "sourcer-dl";
     host.appendChild(box);
   }
+  box.dataset.place = actions.placement ?? "outside";
   box.replaceChildren();
   const add = (label: string, fn?: () => void | Promise<void>) => {
     const b = document.createElement("button");

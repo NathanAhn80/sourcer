@@ -78,6 +78,7 @@ function enhanceCard(card: HTMLElement) {
 
   const media = extractMedia(card);
   mountDownloadButtons(card, {
+    placement: "inside",
     videoCount: media.hasVideo ? 1 : 0,
     photoCount: media.hasVideo ? 0 : media.mediaUrls.length,
     onDownloadVideo: () => download(card, externalId),

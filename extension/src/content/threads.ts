@@ -90,11 +90,28 @@ function extractMedia(root: Element, postCode?: string | null) {
   const images: string[] = [];
   const videos: string[] = [];
 
+  const videoRects = Array.from(root.querySelectorAll("video")).map((v) => v.getBoundingClientRect());
+  const seen = new Set<string>();
   root.querySelectorAll("img").forEach((img) => {
     const src = img.currentSrc || img.src;
     if (!src || src.startsWith("data:")) return;
-    if (src.includes("profile") || (img.naturalWidth > 0 && img.naturalWidth < 48)) return;
-    // Skip obvious video posters counted as images when a video exists nearby
+    if (src.includes("profile")) return;
+    // Avatars, emoji and icons are small; real photos render large
+    const r = img.getBoundingClientRect();
+    if (r.width < 100 || r.height < 100) return;
+    // Profile avatar sits inside a link to the author's profile
+    if (img.closest('a[href^="/@"]:not([href*="/post/"])')) return;
+    // Video posters overlap their <video>
+    if (videoRects.some((v) => r.left < v.right && r.right > v.left && r.top < v.bottom && r.bottom > v.top)) return;
+    // Same photo can appear twice with different size params
+    let key = src;
+    try {
+      key = new URL(src).pathname;
+    } catch {
+      /* keep full src */
+    }
+    if (seen.has(key)) return;
+    seen.add(key);
     images.push(src);
   });
 
