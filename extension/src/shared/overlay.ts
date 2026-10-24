@@ -6,11 +6,11 @@ export function ensureOverlayStyles() {
   style.id = STYLE_ID;
   style.textContent = `
     .sourcer-dl {
-      position: absolute; top: 8px; left: calc(100% + 8px); z-index: 2147483646;
+      position: fixed; top: 0; left: 0; z-index: 2147483646;
       display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
       font: 600 12px/1.2 "Segoe UI", system-ui, sans-serif;
     }
-    .sourcer-dl[data-place="inside"] { left: auto; right: 8px; flex-direction: row; }
+    .sourcer-dl[data-place="inside"] { flex-direction: row; }
     .sourcer-dl button {
       cursor: pointer; border: 1px solid #374151; border-radius: 999px;
       padding: 5px 10px; background: rgba(17, 24, 39, 0.92); color: #f3f4f6;
@@ -36,20 +36,45 @@ export type DownloadActions = {
   placement?: "outside" | "inside";
 };
 
-/** Mounts (or refreshes) a small download button row on a post/note card. */
+const boxes = new Map<HTMLElement, HTMLElement>();
+let tracking = 0;
+
+/** Buttons live on <html> (fixed) so ancestor overflow clipping can't hide them. */
+function placeBoxes() {
+  tracking = 0;
+  for (const [host, box] of boxes) {
+    if (!host.isConnected) {
+      box.remove();
+      boxes.delete(host);
+      continue;
+    }
+    const r = host.getBoundingClientRect();
+    const visible = r.bottom > 0 && r.top < window.innerHeight && r.width > 0;
+    box.style.display = visible ? "flex" : "none";
+    if (!visible) continue;
+    const w = box.offsetWidth || 90;
+    const inside = box.dataset.place === "inside";
+    const left = inside ? r.right - w - 8 : Math.min(r.right + 8, window.innerWidth - w - 4);
+    box.style.left = `${Math.max(4, left)}px`;
+    box.style.top = `${Math.max(8, r.top + 8)}px`;
+  }
+  if (boxes.size) tracking = window.requestAnimationFrame(placeBoxes);
+}
+
+/** Mounts (or refreshes) a small download button row for a post/note card. */
 export function mountDownloadButtons(host: HTMLElement, actions: DownloadActions) {
   ensureOverlayStyles();
-  if (getComputedStyle(host).position === "static") host.style.position = "relative";
-
-  let box = host.querySelector<HTMLElement>(":scope > .sourcer-dl");
+  let box = boxes.get(host);
   if (!actions.videoCount && !actions.photoCount) {
     box?.remove();
+    boxes.delete(host);
     return;
   }
   if (!box) {
     box = document.createElement("div");
     box.className = "sourcer-dl";
-    host.appendChild(box);
+    document.documentElement.appendChild(box);
+    boxes.set(host, box);
   }
   box.dataset.place = actions.placement ?? "outside";
   box.replaceChildren();
@@ -66,13 +91,15 @@ export function mountDownloadButtons(host: HTMLElement, actions: DownloadActions
   };
   if (actions.videoCount) add("⬇ 영상", actions.onDownloadVideo);
   if (actions.photoCount) add(`⬇ 사진 ${actions.photoCount}장`, actions.onDownloadPhotos);
+  if (!tracking) tracking = window.requestAnimationFrame(placeBoxes);
 }
 
 export function removeDownloadButtons(keep: Set<HTMLElement>) {
-  document.querySelectorAll<HTMLElement>(".sourcer-dl").forEach((box) => {
-    const host = box.parentElement;
-    if (!host || !keep.has(host)) box.remove();
-  });
+  for (const [host, box] of boxes) {
+    if (keep.has(host)) continue;
+    box.remove();
+    boxes.delete(host);
+  }
 }
 
 export function showToast(message: string) {
