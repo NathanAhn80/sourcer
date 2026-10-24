@@ -3,8 +3,8 @@ import { defineManifest } from "@crxjs/vite-plugin";
 export default defineManifest({
   manifest_version: 3,
   name: "Sourcer — Threads & Xiaohongshu",
-  description: "Performance overlays, collect, and media download for Threads and Xiaohongshu.",
-  version: "0.1.21",
+  description: "Image and video download buttons for Threads and Xiaohongshu.",
+  version: "0.2.0",
   action: {
     default_popup: "src/popup/index.html",
     default_title: "Sourcer",
@@ -15,7 +15,6 @@ export default defineManifest({
   },
   permissions: ["storage", "downloads", "activeTab"],
   host_permissions: [
-    "http://localhost:3456/*",
     "https://www.threads.net/*",
     "https://threads.net/*",
     "https://www.threads.com/*",
@@ -34,7 +33,7 @@ export default defineManifest({
         "https://www.threads.com/*",
         "https://threads.com/*",
       ],
-      js: ["src/content/threads-hook.ts"],
+      js: ["src/content/media-hook.ts"],
       run_at: "document_start",
       world: "MAIN",
     },
